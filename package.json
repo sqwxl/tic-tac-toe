@@ -1,0 +1,35 @@
+{
+  "name": "tic-tac-toe",
+  "version": "1.0.0",
+  "description": "simple game implemetation in vanilla javascript",
+  "main": "src/index.html",
+  "scripts": {
+    "start": "parcel src/index.html",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "parcel build src/index.html --out-dir docs --public-url ./"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nilueps/tic-tac-toe.git"
+  },
+  "keywords": [
+    "tic-tac-toe",
+    "game"
+  ],
+  "author": "Nicolas Lucino Epstein",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nilueps/tic-tac-toe/issues"
+  },
+  "homepage": "https://github.com/nilueps/tic-tac-toe#readme",
+  "dependencies": {
+    "core-js": "^3.6.5"
+  },
+  "devDependencies": {
+    "eslint": "^7.6.0",
+    "prettier": "^2.0.5"
+  },
+  "browserslist": [
+    "last 3 Firefox versions"
+  ]
+}
