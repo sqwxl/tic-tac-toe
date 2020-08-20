@@ -27,23 +27,24 @@ export const LINES = [
   [2, 4, 6]
 ]
 
-export interface Squares {
+export interface Board {
   squares: string[]
 }
 
-enum Stage {
-  Start = 'START',
+enum GameStage {
+  Init = 'INIT',
+  First = 'FIRST',
   Playing = 'PLAYING',
   Done = 'DONE'
 }
 
-enum GameStatus {
+enum BoardStatus {
   Game = 'GAME',
   Won = 'WON',
   Draw = 'DRAW'
 }
 
-interface GameState { status: GameStatus; winner?: string }
+interface GameState { status: BoardStatus; winner?: string }
 
 interface History {
   squares: string[];
@@ -54,7 +55,7 @@ interface State {
   history: History[];
   step: number;
   // playerX: boolean;
-  stage: Stage
+  stage: GameStage
   ai: boolean
   players: [number, number]
 }
@@ -67,29 +68,22 @@ const xo = ['X', 'O']
 function GameSettingsDialog(props: { handleChange: any; players: [number, number]; show: boolean; ai: boolean }) {
   return (
     <Modal show={props.show} backdrop='static' keyboard={false} centered>
-      <Modal.Header>
-        <Modal.Title>TIC-TAC-TOE</Modal.Title>
+      <Modal.Header className="justify-content-center">
+        <Modal.Title><h1 className="display-4">TIC-TAC-TOE</h1></Modal.Title>
       </Modal.Header>
-      <Modal.Body><p>Choose game type:</p>
-        <Form>
-          <Form.Row className="justify-content-between">
-            <Form.Group>
-              <Button disabled variant="primary">Player 1 <Badge variant="light">{xoSymbols[props.players[0]]}</Badge></Button>
-              <span> vs. </span>
-              <ToggleButtonGroup name="ai-toggle" type="radio" defaultValue={props.ai ? 1 : 0} onChange={(val, e) => props.handleChange({ ai: !!val }, e)}>
-                <ToggleButton value={1}>AI</ToggleButton>
-                <ToggleButton value={0}>Player 2 <Badge variant="light">{xoSymbols[props.players[1]]}</Badge></ToggleButton>
-              </ToggleButtonGroup>
-            </Form.Group>
-            <Form.Group>
-              <Button variant="success" onClick={e => props.handleChange({ stage: Stage.Playing }, e)}>Play!</Button>
-            </Form.Group>
-          </Form.Row>
-          <Form.Row>
-            <Button variant="primary" onClick={e => props.handleChange({ players: [props.players[1], props.players[0]] }, e)}><Badge variant="light">{xoSymbols[props.players[0]]}</Badge> ⇌ <Badge variant="light">{xoSymbols[props.players[1]]}</Badge></Button>
-          </Form.Row>
-        </Form>
+      <Modal.Body><h5>Choose game type:</h5>
+        <Button disabled variant="primary">Player 1 <Badge variant="light">{xoSymbols[props.players[0]]}</Badge></Button>
+        <span> vs. </span>
+        <ToggleButtonGroup name="ai-toggle" type="radio" defaultValue={props.ai ? 1 : 0} onChange={(val, e) => props.handleChange({ ai: !!val }, e)}>
+          <ToggleButton value={1}>AI</ToggleButton>
+          <ToggleButton value={0}>Player 2 <Badge variant="light">{xoSymbols[props.players[1]]}</Badge></ToggleButton>
+        </ToggleButtonGroup>
+        <br />
+        <Button className="mt-1" variant="primary" onClick={e => props.handleChange({ players: [props.players[1], props.players[0]] }, e)}><Badge variant="light">{xoSymbols[props.players[0]]}</Badge> ⇌ <Badge variant="light">{xoSymbols[props.players[1]]}</Badge></Button>
       </Modal.Body>
+      <Modal.Footer>
+        <Button variant="success" onClick={e => props.handleChange({ stage: GameStage.First }, e)}>Play!</Button>
+      </Modal.Footer>
     </Modal >
   )
 }
@@ -105,7 +99,7 @@ function Square(props: { value: string; onClick: (event: React.MouseEvent<HTMLDi
 }
 
 
-function Board(props: { squares: Squares['squares']; onClick: (n: number) => void; }) {
+function Board(props: { squares: Board['squares']; onClick: (n: number) => void; }) {
   function renderSquare() {
     let i = 0
     return function (style?: React.CSSProperties) {
@@ -140,18 +134,6 @@ function Board(props: { squares: Squares['squares']; onClick: (n: number) => voi
       </Row>
     </Container>
   )
-}
-
-
-
-const INITIALSTATE: State = {
-  history: [
-    { squares: Array(9), gameState: { status: GameStatus.Game } }
-  ],
-  step: 0,
-  stage: Stage.Start,
-  ai: true,
-  players: [0, 1]
 }
 
 function AI() {
@@ -213,6 +195,17 @@ function AI() {
   }
 }
 
+
+const INITIALSTATE: State = {
+  history: [
+    { squares: Array(9), gameState: { status: BoardStatus.Game } }
+  ],
+  step: 0,
+  stage: GameStage.Init,
+  ai: true,
+  players: [0, 1]
+}
+
 class Game extends React.Component<{}, State> {
   aiPlayer: { play(players: [number, number], squares: string[]): number | undefined; };
   constructor(props: any) {
@@ -222,21 +215,22 @@ class Game extends React.Component<{}, State> {
     this.handleChange = this.handleChange.bind(this)
   }
 
-  componentWillUpdate() {
-    if (this.state.ai && this.state.step === 0 && this.state.players[1] === 0) {
-      const history = this.state.history.slice(0, this.state.step + 1)
-      const current = history[this.state.step]
-      const squares = [...current.squares]
-      this.makeMove(this.aiPlayer.play(this.state.players, squares), false)
+  componentDidMount() {
+    console.log(this.state.players)
+  }
+  componentDidUpdate() {
+    // Get AI to play first move if it has X
+    if (this.state.stage === GameStage.First && this.state.ai && this.state.players[1] === 0) {
+      this.makeMove(this.aiPlayer.play(this.state.players, this.state.history[0].squares), false)
     }
   }
 
-  getGameState(squares: Squares['squares']): GameState {
+  getGameState(squares: Board['squares']): GameState {
     for (let line of LINES) {
-      if (squares[line[0]] && squares[line[0]] === squares[line[1]] && squares[line[0]] === squares[line[2]]) return { status: GameStatus.Won, winner: squares[line[0]] }
+      if (squares[line[0]] && squares[line[0]] === squares[line[1]] && squares[line[0]] === squares[line[2]]) return { status: BoardStatus.Won, winner: squares[line[0]] }
     }
-    if (squares.every(v => v != null)) return { status: GameStatus.Draw }
-    return { status: GameStatus.Game }
+    if (squares.every(v => v != null)) return { status: BoardStatus.Draw }
+    return { status: BoardStatus.Game }
   }
 
   handleChange(state: State, e: Event): void {
@@ -253,7 +247,7 @@ class Game extends React.Component<{}, State> {
     let history = this.state.history.slice(0, this.state.step + 1)
     let current = history[this.state.step]
     let squares = [...current.squares]
-    if (squares[i] || current.gameState.status !== GameStatus.Game) return
+    if (squares[i] || current.gameState.status !== BoardStatus.Game) return
     if (human) {
       squares[i] = xo[this.state.step % 2]
     } else {
@@ -262,11 +256,13 @@ class Game extends React.Component<{}, State> {
     let gameState = this.getGameState(squares)
     history.push({ squares: squares, gameState: gameState })
     let step = history.length - 1
+    let stage = gameState.status !== BoardStatus.Game ? GameStage.Done : GameStage.Playing
     this.setState({
       history: history,
-      step: step
+      step: step,
+      stage: stage
     }, () => {
-      if (human && this.state.ai && gameState.status === GameStatus.Game) {
+      if (stage === GameStage.Playing && human && this.state.ai && gameState.status === BoardStatus.Game) {
         const history = this.state.history.slice(0, this.state.step + 1)
         const current = history[this.state.step]
         const squares = [...current.squares]
@@ -280,17 +276,16 @@ class Game extends React.Component<{}, State> {
   }
 
   undo(): void {
-    const step = this.state.step - (this.state.ai ? 2 : 1) || 0
-    // const gameState = this.getGameState(this.state.history[step].squares)
+    const step = this.state.step - (this.state.ai ? 2 : 1) || this.state.players[0]
     this.setState({
       step: step,
+      stage: GameStage.Playing
     })
   }
 
   redo(): void {
     let step = this.state.step + (this.state.ai ? 2 : 1)
     if (step >= this.state.history.length - 1) step = this.state.history.length - 1
-    // const gameState = this.getGameState(this.state.history[step].squares)
     this.setState({
       step: step,
     })
@@ -302,22 +297,28 @@ class Game extends React.Component<{}, State> {
     const current = history[this.state.step]
     const squares = current.squares
     let alert
-    if (current.gameState.status !== GameStatus.Game) {
+    if (current.gameState.status !== BoardStatus.Game) {
       let message
       switch (current.gameState.status) {
-        case GameStatus.Won:
+        case BoardStatus.Won:
           message = current.gameState.winner + " wins!"
           break
-        case GameStatus.Draw:
+        case BoardStatus.Draw:
           message = 'Draw!'
       }
       alert = <Alert variant='primary'>{message}</Alert>
     }
+    let turn
+    if (this.state.stage === GameStage.Playing) {
+      turn = 'Player ' + (this.state.ai ? '1' : (this.state.players[this.state.step % 2] + 1).toString()) + ' ' + xoSymbols[this.state.step % 2]
+    } else {
+      turn = '-'
+    }
     return (
       <Container>
-        <GameSettingsDialog handleChange={this.handleChange} players={this.state.players} show={this.state.stage === Stage.Start} ai={this.state.ai} />
-        <Container role="navigation">
-          <Nav className="justify-content-center">
+        <GameSettingsDialog handleChange={this.handleChange} players={this.state.players} show={this.state.stage === GameStage.Init} ai={this.state.ai} />
+        <Container className="mb-" role="navigation">
+          <Nav className="justify-content-center mt-1 mb-4">
             <Nav.Item>
               <Nav.Link onClick={() => this.newGame()}>New Game</Nav.Link>
             </Nav.Item>
@@ -328,7 +329,7 @@ class Game extends React.Component<{}, State> {
               <Nav.Link onClick={() => this.redo()} disabled={history.length === 1 || this.state.step === history.length - 1}>Redo ↷</Nav.Link>
             </Nav.Item>
             <Nav.Item>
-              <Nav.Link disabled><Badge variant='primary'>Turn: {xoSymbols[this.state.step % 2]} (Player {this.state.ai ? '1' : this.state.players[this.state.step % 2] + 1})</Badge></Nav.Link>
+              <Nav.Link disabled><Badge variant='primary'>Turn: {turn}</Badge></Nav.Link>
             </Nav.Item>
           </Nav>
         </Container>
