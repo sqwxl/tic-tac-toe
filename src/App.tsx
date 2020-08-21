@@ -7,7 +7,6 @@ import Col from 'react-bootstrap/Col';
 import Badge from "react-bootstrap/Badge";
 import Alert from 'react-bootstrap/Alert'
 import Modal from 'react-bootstrap/Modal'
-import Form from 'react-bootstrap/Form'
 import Button from 'react-bootstrap/Button'
 import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup'
 import ToggleButton from 'react-bootstrap/esm/ToggleButton';
@@ -27,9 +26,6 @@ export const LINES = [
   [2, 4, 6]
 ]
 
-export interface Board {
-  squares: string[]
-}
 
 enum GameStage {
   Init = 'INIT',
@@ -44,20 +40,23 @@ enum BoardStatus {
   Draw = 'DRAW'
 }
 
-interface GameState { status: BoardStatus; winner?: string }
 
-interface History {
-  squares: string[];
-  gameState: GameState
+interface GameState { status: BoardStatus; winner?: string }
+type Board = string[]
+
+interface Moment {
+  board: Board;
+  turn: 0 | 1;
+  gameState: GameState;
 }
 
+type Players = [number, number]
 interface State {
-  history: History[];
+  history: Moment[];
   step: number;
-  // playerX: boolean;
   stage: GameStage
   ai: boolean
-  players: [number, number]
+  players: Players
 }
 
 
@@ -99,7 +98,7 @@ function Square(props: { value: string; onClick: (event: React.MouseEvent<HTMLDi
 }
 
 
-function Board(props: { squares: Board['squares']; onClick: (n: number) => void; }) {
+function Board(props: { squares: Board; onClick: (n: number) => void; }) {
   function renderSquare() {
     let i = 0
     return function (style?: React.CSSProperties) {
@@ -136,69 +135,66 @@ function Board(props: { squares: Board['squares']; onClick: (n: number) => void;
   )
 }
 
-function AI() {
-  return {
-    play(players: [number, number], squares: string[]) {
-      const self = xo[players[1]]
-      const opponent = xo[players[0]]
-      // check for two of a kind
-      function atari(line: number[], kind: string): {
-        found: boolean;
-        value?: number;
-      } {
-        let kinds = 0;
-        let empty = null;
-        for (let ele of line) {
-          if (squares[ele] === kind)
-            kinds++;
-          if (squares[ele] == null)
-            empty = ele;
-        }
-        if (kinds === 2 && empty != null)
-          return { found: true, value: empty };
-        return { found: false };
-      }
-
-      // first move (random corner)
-      if (squares.every(v => !v))
-        return 0 + 2 * Math.round(Math.random() * 4);
-
-      // case 1: top priority is winning move
-      for (let line of LINES) {
-        let empty = atari(line, self);
-        if (empty.found)
-          return empty.value;
-      }
-      //case 2: blocking winning move
-      for (let line of LINES) {
-        let empty = atari(line, opponent);
-        if (empty.found)
-          return empty.value;
-      }
-      // case 3: preparing for win, ideally setting up a 'double'
-      // empty lines with already one move
-      let oneOfThree = LINES.filter(line => line.some(val => squares[val] === self) && !line.some(val => squares[val] === opponent));
-      if (oneOfThree.length) {
-        return oneOfThree[0].filter(val => squares[val] == null)[0];
-      }
-      // empty lines
-      let emptyLines = LINES.filter(line => line.every(val => squares[val] === null));
-      if (emptyLines.length) {
-        return emptyLines[0][0];
-      }
-      // case 4: play anywhere (or nowhere)
-      for (let [idx, square] of squares.entries()) {
-        if (square == null)
-          return idx;
-      }
+function AI(squares: Board, players: Players) {
+  const self = xo[players[1]]
+  const opponent = xo[players[0]]
+  // check for two of a kind
+  function atari(line: number[], kind: string): {
+    found: boolean;
+    value?: number;
+  } {
+    let kinds = 0;
+    let empty = null;
+    for (let ele of line) {
+      if (squares[ele] === kind)
+        kinds++;
+      if (squares[ele] == null)
+        empty = ele;
     }
+    if (kinds === 2 && empty != null)
+      return { found: true, value: empty };
+    return { found: false };
+  }
+
+  // first move (random corner)
+  if (squares.every(v => !v))
+    return 0 + 2 * Math.round(Math.random() * 4);
+
+  // case 1: top priority is winning move
+  for (let line of LINES) {
+    let empty = atari(line, self);
+    if (empty.found)
+      return empty.value;
+  }
+  //case 2: blocking winning move
+  for (let line of LINES) {
+    let empty = atari(line, opponent);
+    if (empty.found)
+      return empty.value;
+  }
+  // case 3: preparing for win, ideally setting up a 'double'
+  // empty lines with already one move
+  let oneOfThree = LINES.filter(line => line.some(val => squares[val] === self) && !line.some(val => squares[val] === opponent));
+  if (oneOfThree.length) {
+    return oneOfThree[0].filter(val => squares[val] == null)[0];
+  }
+  // empty lines
+  let emptyLines = LINES.filter(line => line.every(val => squares[val] === null));
+  if (emptyLines.length) {
+    return emptyLines[0][0];
+  }
+  // case 4: play anywhere (or nowhere)
+  for (let [idx, square] of squares.entries()) {
+    if (square == null)
+      return idx;
   }
 }
 
 
+
 const INITIALSTATE: State = {
   history: [
-    { squares: Array(9), gameState: { status: BoardStatus.Game } }
+    { board: Array(9), turn: 0, gameState: { status: BoardStatus.Game } }
   ],
   step: 0,
   stage: GameStage.Init,
@@ -207,11 +203,11 @@ const INITIALSTATE: State = {
 }
 
 class Game extends React.Component<{}, State> {
-  aiPlayer: { play(players: [number, number], squares: string[]): number | undefined; };
+  aiPlayer: (squares: Board, players: Players) => number | undefined;
   constructor(props: any) {
     super(props)
     this.state = INITIALSTATE
-    this.aiPlayer = AI()
+    this.aiPlayer = AI
     this.handleChange = this.handleChange.bind(this)
   }
 
@@ -221,15 +217,15 @@ class Game extends React.Component<{}, State> {
   componentDidUpdate() {
     // Get AI to play first move if it has X
     if (this.state.stage === GameStage.First && this.state.ai && this.state.players[1] === 0) {
-      this.makeMove(this.aiPlayer.play(this.state.players, this.state.history[0].squares), false)
+      this.makeMove(this.aiPlayer(this.state.history[0].board, this.state.players), false)
     }
   }
 
-  getGameState(squares: Board['squares']): GameState {
+  getGameState(board: Board): GameState {
     for (let line of LINES) {
-      if (squares[line[0]] && squares[line[0]] === squares[line[1]] && squares[line[0]] === squares[line[2]]) return { status: BoardStatus.Won, winner: squares[line[0]] }
+      if (board[line[0]] && board[line[0]] === board[line[1]] && board[line[0]] === board[line[2]]) return { status: BoardStatus.Won, winner: board[line[0]] }
     }
-    if (squares.every(v => v != null)) return { status: BoardStatus.Draw }
+    if (board.every(v => v != null)) return { status: BoardStatus.Draw }
     return { status: BoardStatus.Game }
   }
 
@@ -246,15 +242,15 @@ class Game extends React.Component<{}, State> {
     if (i == null) return
     let history = this.state.history.slice(0, this.state.step + 1)
     let current = history[this.state.step]
-    let squares = [...current.squares]
+    let squares = [...current.board]
     if (squares[i] || current.gameState.status !== BoardStatus.Game) return
     if (human) {
-      squares[i] = xo[this.state.step % 2]
+      squares[i] = xo[current.turn]
     } else {
       squares[i] = xo[this.state.players[1]]
     }
     let gameState = this.getGameState(squares)
-    history.push({ squares: squares, gameState: gameState })
+    history.push({ board: squares, turn: current.turn === 0 ? 1 : 0, gameState: gameState })
     let step = history.length - 1
     let stage = gameState.status !== BoardStatus.Game ? GameStage.Done : GameStage.Playing
     this.setState({
@@ -265,8 +261,8 @@ class Game extends React.Component<{}, State> {
       if (stage === GameStage.Playing && human && this.state.ai && gameState.status === BoardStatus.Game) {
         const history = this.state.history.slice(0, this.state.step + 1)
         const current = history[this.state.step]
-        const squares = [...current.squares]
-        this.makeMove(this.aiPlayer.play(this.state.players, squares), false)
+        const squares = [...current.board]
+        this.makeMove(this.aiPlayer(squares, this.state.players), false)
       }
     })
   }
@@ -276,7 +272,13 @@ class Game extends React.Component<{}, State> {
   }
 
   undo(): void {
-    const step = this.state.step - (this.state.ai ? 2 : 1) || this.state.players[0]
+    let step = this.state.step
+    if (this.state.ai) {
+      step -= this.state.history[step - 1].turn === this.state.players[0] ? 1 : 2
+    } else {
+      step--
+    }
+    if (step < 0) step = this.state.players[0]
     this.setState({
       step: step,
       stage: GameStage.Playing
@@ -295,7 +297,7 @@ class Game extends React.Component<{}, State> {
   render() {
     const history = this.state.history
     const current = history[this.state.step]
-    const squares = current.squares
+    const squares = current.board
     let alert
     if (current.gameState.status !== BoardStatus.Game) {
       let message
@@ -323,7 +325,7 @@ class Game extends React.Component<{}, State> {
               <Nav.Link onClick={() => this.newGame()}>New Game</Nav.Link>
             </Nav.Item>
             <Nav.Item>
-              <Nav.Link onClick={() => this.undo()} disabled={this.state.step === 0}>Undo ↶</Nav.Link>
+              <Nav.Link onClick={() => this.undo()} disabled={this.state.step === 0 || (this.state.players[0] === 1 && this.state.step === 1)}>Undo ↶</Nav.Link>
             </Nav.Item>
             <Nav.Item>
               <Nav.Link onClick={() => this.redo()} disabled={history.length === 1 || this.state.step === history.length - 1}>Redo ↷</Nav.Link>
