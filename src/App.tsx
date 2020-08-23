@@ -35,7 +35,7 @@ enum GameStage {
 }
 
 enum BoardStatus {
-  Game = 'GAME',
+  Undetermined = 'UNDETERMINED',
   Won = 'WON',
   Draw = 'DRAW'
 }
@@ -50,7 +50,7 @@ interface Moment {
   gameState: GameState;
 }
 
-type Players = [number, number]
+type Players = [number, number] // [player 1, player 2 (or AI)]
 interface State {
   history: Moment[];
   step: number;
@@ -135,66 +135,9 @@ function Board(props: { squares: Board; onClick: (n: number) => void; }) {
   )
 }
 
-function AI(squares: Board, players: Players) {
-  const self = xo[players[1]]
-  const opponent = xo[players[0]]
-  // check for two of a kind
-  function atari(line: number[], kind: string): {
-    found: boolean;
-    value?: number;
-  } {
-    let kinds = 0;
-    let empty = null;
-    for (let ele of line) {
-      if (squares[ele] === kind)
-        kinds++;
-      if (squares[ele] == null)
-        empty = ele;
-    }
-    if (kinds === 2 && empty != null)
-      return { found: true, value: empty };
-    return { found: false };
-  }
-
-  // first move (random corner)
-  if (squares.every(v => !v))
-    return 0 + 2 * Math.round(Math.random() * 4);
-
-  // case 1: top priority is winning move
-  for (let line of LINES) {
-    let empty = atari(line, self);
-    if (empty.found)
-      return empty.value;
-  }
-  //case 2: blocking winning move
-  for (let line of LINES) {
-    let empty = atari(line, opponent);
-    if (empty.found)
-      return empty.value;
-  }
-  // case 3: preparing for win, ideally setting up a 'double'
-  // empty lines with already one move
-  let oneOfThree = LINES.filter(line => line.some(val => squares[val] === self) && !line.some(val => squares[val] === opponent));
-  if (oneOfThree.length) {
-    return oneOfThree[0].filter(val => squares[val] == null)[0];
-  }
-  // empty lines
-  let emptyLines = LINES.filter(line => line.every(val => squares[val] === null));
-  if (emptyLines.length) {
-    return emptyLines[0][0];
-  }
-  // case 4: play anywhere (or nowhere)
-  for (let [idx, square] of squares.entries()) {
-    if (square == null)
-      return idx;
-  }
-}
-
-
-
 const INITIALSTATE: State = {
   history: [
-    { board: Array(9), turn: 0, gameState: { status: BoardStatus.Game } }
+    { board: Array(9), turn: 0, gameState: { status: BoardStatus.Undetermined } }
   ],
   step: 0,
   stage: GameStage.Init,
@@ -211,9 +154,6 @@ class Game extends React.Component<{}, State> {
     this.handleChange = this.handleChange.bind(this)
   }
 
-  componentDidMount() {
-    console.log(this.state.players)
-  }
   componentDidUpdate() {
     // Get AI to play first move if it has X
     if (this.state.stage === GameStage.First && this.state.ai && this.state.players[1] === 0) {
@@ -222,11 +162,13 @@ class Game extends React.Component<{}, State> {
   }
 
   getGameState(board: Board): GameState {
+    // check for 3 in a row
     for (let line of LINES) {
       if (board[line[0]] && board[line[0]] === board[line[1]] && board[line[0]] === board[line[2]]) return { status: BoardStatus.Won, winner: board[line[0]] }
     }
+    // check for draw
     if (board.every(v => v != null)) return { status: BoardStatus.Draw }
-    return { status: BoardStatus.Game }
+    return { status: BoardStatus.Undetermined }
   }
 
   handleChange(state: State, e: Event): void {
@@ -243,22 +185,26 @@ class Game extends React.Component<{}, State> {
     let history = this.state.history.slice(0, this.state.step + 1)
     let current = history[this.state.step]
     let squares = [...current.board]
-    if (squares[i] || current.gameState.status !== BoardStatus.Game) return
+    // reject move if the game is finished
+    if (squares[i] || current.gameState.status !== BoardStatus.Undetermined) return
+    // record move
     if (human) {
       squares[i] = xo[current.turn]
     } else {
       squares[i] = xo[this.state.players[1]]
     }
+    // update game state and app state
     let gameState = this.getGameState(squares)
     history.push({ board: squares, turn: current.turn === 0 ? 1 : 0, gameState: gameState })
     let step = history.length - 1
-    let stage = gameState.status !== BoardStatus.Game ? GameStage.Done : GameStage.Playing
+    let stage = gameState.status !== BoardStatus.Undetermined ? GameStage.Done : GameStage.Playing
     this.setState({
       history: history,
       step: step,
       stage: stage
     }, () => {
-      if (stage === GameStage.Playing && human && this.state.ai && gameState.status === BoardStatus.Game) {
+      // perform AI move, if needed, after the state has been updated
+      if (stage === GameStage.Playing && human && this.state.ai && gameState.status === BoardStatus.Undetermined) {
         const history = this.state.history.slice(0, this.state.step + 1)
         const current = history[this.state.step]
         const squares = [...current.board]
@@ -299,7 +245,7 @@ class Game extends React.Component<{}, State> {
     const current = history[this.state.step]
     const squares = current.board
     let alert
-    if (current.gameState.status !== BoardStatus.Game) {
+    if (current.gameState.status !== BoardStatus.Undetermined) {
       let message
       switch (current.gameState.status) {
         case BoardStatus.Won:
@@ -310,11 +256,11 @@ class Game extends React.Component<{}, State> {
       }
       alert = <Alert variant='primary'>{message}</Alert>
     }
-    let turn
-    if (this.state.stage === GameStage.Playing) {
-      turn = 'Player ' + (this.state.ai ? '1' : (this.state.players[this.state.step % 2] + 1).toString()) + ' ' + xoSymbols[this.state.step % 2]
+    let turnMsg
+    if (this.state.stage !== GameStage.Done) {
+      turnMsg = 'Player ' + (this.state.players[current.turn] + 1) + ' ' + xoSymbols[current.turn]
     } else {
-      turn = '-'
+      turnMsg = '-'
     }
     return (
       <Container>
@@ -331,7 +277,7 @@ class Game extends React.Component<{}, State> {
               <Nav.Link onClick={() => this.redo()} disabled={history.length === 1 || this.state.step === history.length - 1}>Redo ↷</Nav.Link>
             </Nav.Item>
             <Nav.Item>
-              <Nav.Link disabled><Badge variant='primary'>Turn: {turn}</Badge></Nav.Link>
+              <Nav.Link disabled><Badge variant='primary'>Turn: {turnMsg}</Badge></Nav.Link>
             </Nav.Item>
           </Nav>
         </Container>
@@ -347,6 +293,104 @@ function App() {
   return (
     <Game />
   );
+}
+
+
+function AI(board: Board, players: Players) {
+  const self = xo[players[1]]
+  const opponent = xo[players[0]]
+
+  // Determine move, in order of priority (inspired by https://en.wikipedia.org/wiki/Tic-tac-toe#Strategy)
+
+  // case 1: top priority is winning move
+  for (let line of LINES) {
+    let empty = atari(line, self);
+    if (empty.found)
+      return empty.value;
+  }
+  //case 2: blocking winning move
+  for (let line of LINES) {
+    let empty = atari(line, opponent);
+    if (empty.found)
+      return empty.value;
+  }
+  // case 3: setting up a 'fork'
+  let selfFork = fork(self, opponent)
+  if (selfFork.found)
+    return selfFork.value
+
+  // case 4: preventing a 'fork'
+  let oppFork = fork(opponent, self)
+  if (oppFork.found)
+    return oppFork.value
+
+  // case 5: if available: play center
+  if (board[4] == null)
+    return 4
+
+  const corners = [0, 2, 6, 8]
+  // case 6: if opponent is in a corner, play opposite, if free
+  for (let [idx, corner] of corners.entries()) {
+    if (board[corner] === opponent) {
+      let opposite = corners[(idx + 2) % 4]
+      if (board[opposite] == null) {
+        return opposite
+      }
+    }
+  }
+
+  // case 7: empty corner
+  for (let corner of corners) {
+    if (board[corner] == null)
+      return corner
+  }
+
+  // case 8: empty side
+  for (let side of [1, 3, 5, 7]) {
+    if (board[side] == null)
+      return side
+  }
+
+  // check for two of a kind
+  function atari(line: number[], kind: string): {
+    found: boolean;
+    value?: number;
+  } {
+    let kinds = 0;
+    let empty = null;
+    for (let ele of line) {
+      if (board[ele] === kind)
+        kinds++;
+      if (board[ele] == null)
+        empty = ele;
+    }
+    if (kinds === 2 && empty != null)
+      return { found: true, value: empty };
+    return { found: false };
+  }
+
+  // setting up a 'fork'
+  function fork(favor: string, disfavor: string): { found: boolean, value?: number } {
+    // empty lines with already one friendly move
+    // (checking for some 'self' and no 'opponent' is enough)
+    let oneOfThree = LINES.filter(line => line.some(val => board[val] === favor) && !line.some(val => board[val] === disfavor));
+    // fork not possible if less than two matches are found
+    if (oneOfThree.length < 2) return { found: false }
+    // check for overlaps
+    for (let [a, lineA] of oneOfThree.entries()) {
+      for (let [b, lineB] of oneOfThree.entries()) {
+        // reject same line
+        if (a === b) continue
+        // check for shared empty square
+        for (let sq of lineA) {
+          if (lineB.includes(sq) && board[sq] == null) {
+            return { found: true, value: sq }
+          }
+        }
+      }
+    }
+    return { found: false }
+  }
 }
 
 
