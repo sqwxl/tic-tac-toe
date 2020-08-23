@@ -109,27 +109,27 @@ function Board(props: { squares: Board; onClick: (n: number) => void; }) {
   let square = renderSquare()
   let borderStyle = '1px solid'
   return (
-    <Container>
+    <Container fluid="sm">
       <Row className="board-row justify-content-center">
-        <Col></Col>
+        <Col sm={1} lg={2}></Col>
         {square()}
         {square({ borderLeft: borderStyle, borderRight: borderStyle })}
         {square()}
-        <Col></Col>
+        <Col sm={1} lg={2}></Col>
       </Row>
       <Row className="board-row justify-content-center">
-        <Col></Col>
+        <Col sm={1} lg={2}></Col>
         {square({ borderTop: borderStyle, borderBottom: borderStyle })}
         {square({ border: borderStyle })}
         {square({ borderTop: borderStyle, borderBottom: borderStyle })}
-        <Col></Col>
+        <Col sm={1} lg={2}></Col>
       </Row>
       <Row className="board-row justify-content-center">
-        <Col></Col>
+        <Col sm={1} lg={2}></Col>
         {square()}
         {square({ borderLeft: borderStyle, borderRight: borderStyle })}
         {square()}
-        <Col></Col>
+        <Col sm={1} lg={2}></Col>
       </Row>
     </Container>
   )
@@ -299,8 +299,15 @@ function App() {
 function AI(board: Board, players: Players) {
   const self = xo[players[1]]
   const opponent = xo[players[0]]
+  const corners = [0, 2, 6, 8]
 
   // Determine move, in order of priority (inspired by https://en.wikipedia.org/wiki/Tic-tac-toe#Strategy)
+
+  // case 0: if AI has first move, play in random corner or center (to keep things interesting; insofar as tic tac toe can be interesting anyway...)
+  if (board.every(sq => sq == null)) {
+    return corners.concat([4])[Math.floor(Math.random() * 5)]
+  }
+
 
   // case 1: top priority is winning move
   for (let line of LINES) {
@@ -328,7 +335,6 @@ function AI(board: Board, players: Players) {
   if (board[4] == null)
     return 4
 
-  const corners = [0, 2, 6, 8]
   // case 6: if opponent is in a corner, play opposite, if free
   for (let [idx, corner] of corners.entries()) {
     if (board[corner] === opponent) {
